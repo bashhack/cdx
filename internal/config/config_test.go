@@ -22,19 +22,22 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestLoad_NoConfigFile(t *testing.T) {
 	// Load should succeed even with no config file (graceful degradation)
-	// Change to a temp directory with no config
+	// Change to a temp directory with no config and isolate HOME
+	// to prevent picking up ~/.cdx.yaml from the developer's machine
 	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := os.Chdir(origDir); err != nil {
-			t.Errorf("failed to restore working directory: %v", err)
+		if chErr := os.Chdir(origDir); chErr != nil {
+			t.Errorf("failed to restore working directory: %v", chErr)
 		}
 	})
 
-	if err := os.Chdir(tmp); err != nil {
+	err = os.Chdir(tmp)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -56,8 +59,8 @@ func TestLoad_WithConfigFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := os.Chdir(origDir); err != nil {
-			t.Errorf("failed to restore working directory: %v", err)
+		if chErr := os.Chdir(origDir); chErr != nil {
+			t.Errorf("failed to restore working directory: %v", chErr)
 		}
 	})
 
@@ -66,11 +69,13 @@ func TestLoad_WithConfigFile(t *testing.T) {
 context_lines: 5
 `
 	configPath := filepath.Join(tmp, ".cdx.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	err = os.WriteFile(configPath, []byte(configContent), 0o600)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.Chdir(tmp); err != nil {
+	err = os.Chdir(tmp)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -94,23 +99,17 @@ func TestLoad_EnvOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := os.Chdir(origDir); err != nil {
-			t.Errorf("failed to restore working directory: %v", err)
+		if chErr := os.Chdir(origDir); chErr != nil {
+			t.Errorf("failed to restore working directory: %v", chErr)
 		}
 	})
 
-	if err := os.Chdir(tmp); err != nil {
+	err = os.Chdir(tmp)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.Setenv("CDX_OUTPUT_FORMAT", "plain"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Unsetenv("CDX_OUTPUT_FORMAT"); err != nil {
-			t.Errorf("failed to unset CDX_OUTPUT_FORMAT: %v", err)
-		}
-	})
+	t.Setenv("CDX_OUTPUT_FORMAT", "plain")
 
 	cfg, err := Load()
 	if err != nil {
@@ -128,11 +127,13 @@ func TestConfigDir(t *testing.T) {
 		t.Fatalf("ConfigDir() error = %v", err)
 	}
 
-	// Should end with .config/cdx
+	// Should end with cdx (OS-specific parent varies)
 	if filepath.Base(dir) != "cdx" {
 		t.Errorf("ConfigDir() = %q, want path ending in 'cdx'", dir)
 	}
-	if filepath.Base(filepath.Dir(dir)) != ".config" {
-		t.Errorf("ConfigDir() = %q, want path containing '.config'", dir)
+
+	// Should be an absolute path
+	if !filepath.IsAbs(dir) {
+		t.Errorf("ConfigDir() = %q, want absolute path", dir)
 	}
 }

@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -12,6 +13,24 @@ var (
 	outputFormat string
 	noColor      bool
 )
+
+// ExitError is an error that carries a specific exit code.
+// Commands can return this to signal a non-standard exit code.
+type ExitError struct {
+	Err  error
+	Code int
+}
+
+func (e ExitError) Error() string {
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return ""
+}
+
+func (e ExitError) Unwrap() error {
+	return e.Err
+}
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
@@ -28,14 +47,31 @@ Examples:
   cdx outline main.go    # Show structure of main.go`,
 }
 
-// Execute runs the root command.
+// Execute runs the root command and exits on error.
+// This is the main entry point for the CLI binary.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := ExecuteE(); err != nil {
+		// Check for ExitError with custom exit code
+		var exitErr ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.Code)
+		}
 		os.Exit(1)
 	}
 }
 
+// ExecuteE runs the root command and returns any error.
+// This is useful for testing and programmatic use.
+func ExecuteE() error {
+	return rootCmd.Execute()
+}
+
 func init() {
+	// Silence Cobra's built-in error output - we handle errors ourselves via formatters
+	rootCmd.SilenceErrors = true
+	// Don't show usage on errors - only on --help
+	rootCmd.SilenceUsage = true
+
 	// Global flags available to all commands
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "auto",
 		"Output format: auto, human, json, plain")

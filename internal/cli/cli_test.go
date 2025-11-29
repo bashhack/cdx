@@ -8,18 +8,20 @@ import (
 
 func TestVersionCommand(t *testing.T) {
 	tests := []struct {
-		name      string
-		version   string
-		commit    string
-		buildDate string
-		wantOut   []string // substrings that should appear in output
+		name       string
+		version    string
+		commit     string
+		buildDate  string
+		wantOut    []string // substrings that should appear in output
+		wantAbsent []string // substrings that should NOT appear
 	}{
 		{
-			name:      "dev version",
-			version:   "dev",
-			commit:    "unknown",
-			buildDate: "unknown",
-			wantOut:   []string{"cdx dev"},
+			name:       "dev version shows minimal output",
+			version:    "dev",
+			commit:     "unknown",
+			buildDate:  "unknown",
+			wantOut:    []string{"cdx dev"},
+			wantAbsent: []string{"commit:", "built:"}, // dev mode should not show metadata
 		},
 		{
 			name:      "release version with metadata",
@@ -56,6 +58,11 @@ func TestVersionCommand(t *testing.T) {
 					t.Errorf("output = %q, want substring %q", out, want)
 				}
 			}
+			for _, absent := range tt.wantAbsent {
+				if strings.Contains(out, absent) {
+					t.Errorf("output = %q, should NOT contain %q", out, absent)
+				}
+			}
 		})
 	}
 }
@@ -74,11 +81,11 @@ func TestRootCommand_Help(t *testing.T) {
 
 	wantSubstrings := []string{
 		"cdx",
-		"Code Explorer",
-		"Fast",
+		"Usage:",
 		"--output",
 		"--no-color",
 		"version",
+		"help",
 	}
 
 	for _, want := range wantSubstrings {
@@ -91,8 +98,8 @@ func TestRootCommand_Help(t *testing.T) {
 func TestRootCommand_Flags(t *testing.T) {
 	tests := []struct {
 		name       string
-		args       []string
 		wantFormat string
+		args       []string
 		wantColor  bool
 	}{
 		{

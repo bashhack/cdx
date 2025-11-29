@@ -129,7 +129,7 @@ lint/golangci: check_golangci
 
 ## audit: Tidy dependencies and format, vet and test all code
 .PHONY: audit
-audit: check_goimports check_staticcheck
+audit: check_goimports check_staticcheck check_golangci
 	@echo 'Tidying and verifying module dependencies...'
 	go mod tidy
 	go mod verify
@@ -139,6 +139,8 @@ audit: check_goimports check_staticcheck
 	go vet ./...
 	@echo 'Running staticcheck...'
 	staticcheck ./...
+	@echo 'Running golangci-lint...'
+	golangci-lint run ./...
 	@echo 'Running tests...'
 	go test -short -vet=off ./...
 	@echo '✅ Audit complete'
