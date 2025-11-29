@@ -1,0 +1,24 @@
+# Binary
+cdx
+
+# Go
+*.test
+*.out
+
+# macOS
+.DS_Store
+._*
+
+# Emacs
+*~
+\#*\#
+.#*
+auto-save-list
+tramp
+*_flymake.*
+flycheck_*.el
+.projectile
+.dir-locals.el
+
+# Environment
+.env
