@@ -28,10 +28,10 @@ func DefaultConfig() *Config {
 }
 
 // Load reads configuration from files and environment.
-// It looks for config in order of precedence:
-// 1. .cdx.yaml in current directory
-// 2. config.yaml in OS-specific config directory (e.g., ~/.config/cdx/ on Linux)
-// 3. .cdx.yaml in home directory
+// It looks for .cdx.yaml in order of precedence:
+// 1. Current directory (./.cdx.yaml)
+// 2. OS-specific config directory (e.g., ~/.config/cdx/.cdx.yaml on Linux)
+// 3. Home directory (~/.cdx.yaml)
 // 4. Environment variables prefixed with CDX_
 func Load() (*Config, error) {
 	cfg := DefaultConfig()
@@ -46,12 +46,7 @@ func Load() (*Config, error) {
 	// Then OS-specific config directory
 	if configDir, err := ConfigDir(); err == nil {
 		v.AddConfigPath(configDir)
-		// Also look for config.yaml (without dot prefix) in config dir
-		v.SetConfigName("config")
 	}
-
-	// Reset to .cdx for home directory search
-	v.SetConfigName(".cdx")
 
 	// Then home directory
 	if home, err := os.UserHomeDir(); err == nil {
