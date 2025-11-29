@@ -35,9 +35,9 @@ confirm:
 run:
 	go run ./cmd/cdx
 
-## run/tests: Run test suite
-.PHONY: run/tests
-run/tests:
+## test: Run test suite
+.PHONY: test
+test:
 	go test -v ./...
 
 ## dev/setup/hooks: Install git hooks for pre-commit and commit-msg checks
@@ -68,7 +68,14 @@ dev/setup/hooks:
 # QUALITY CONTROL
 # ============================================================================= #
 
-# Internal helper - not in help menu
+# Internal helpers - not in help menu
+.PHONY: check_goimports
+check_goimports:
+	@if ! command -v goimports >/dev/null 2>&1; then \
+		echo "Installing goimports..."; \
+		go install golang.org/x/tools/cmd/goimports@latest; \
+	fi
+
 .PHONY: check_staticcheck
 check_staticcheck:
 	@if ! command -v staticcheck >/dev/null 2>&1; then \
@@ -76,25 +83,24 @@ check_staticcheck:
 		go install honnef.co/go/tools/cmd/staticcheck@latest; \
 	fi
 
+.PHONY: check_golangci
+check_golangci:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint v2.6.2..."; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $$(go env GOPATH)/bin v2.6.2; \
+	fi
+
 ## format: Format all Go code with goimports
 .PHONY: format
-format:
+format: check_goimports
 	@echo 'Formatting Go code...'
-	@if ! command -v goimports >/dev/null 2>&1; then \
-		echo "Installing goimports..."; \
-		go install golang.org/x/tools/cmd/goimports@latest; \
-	fi
 	@goimports -w -local github.com/bashhack/cdx $$(find . -name '*.go' -not -path "./vendor/*")
 	@echo '✅ Code formatted'
 
 ## format/check: Check if code is properly formatted (non-destructive)
 .PHONY: format/check
-format/check:
+format/check: check_goimports
 	@echo 'Checking Go code formatting...'
-	@if ! command -v goimports >/dev/null 2>&1; then \
-		echo "Installing goimports..."; \
-		go install golang.org/x/tools/cmd/goimports@latest; \
-	fi
 	@if [ -n "$$(goimports -l -local github.com/bashhack/cdx $$(find . -name '*.go' -not -path './vendor/*'))" ]; then \
 		echo "❌ The following files need formatting:"; \
 		goimports -l -local github.com/bashhack/cdx $$(find . -name '*.go' -not -path './vendor/*'); \
@@ -105,47 +111,33 @@ format/check:
 
 ## lint: Run linters without tests
 .PHONY: lint
-lint:
+lint: check_goimports check_staticcheck
 	@echo 'Formatting code...'
-	@if ! command -v goimports >/dev/null 2>&1; then \
-		echo "Installing goimports..."; \
-		go install golang.org/x/tools/cmd/goimports@latest; \
-	fi
 	@goimports -w -local github.com/bashhack/cdx $$(find . -name '*.go' -not -path "./vendor/*")
 	@echo 'Vetting code...'
 	go vet ./...
 	@echo 'Running staticcheck...'
-	@$(MAKE) check_staticcheck
 	staticcheck ./...
 	@echo '✅ Linting complete'
 
 ## lint/golangci: Run golangci-lint (comprehensive linting tool)
 .PHONY: lint/golangci
-lint/golangci:
+lint/golangci: check_golangci
 	@echo 'Running golangci-lint...'
-	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		echo "Installing golangci-lint v2.6.2..."; \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $$(go env GOPATH)/bin v2.6.2; \
-	fi
 	@golangci-lint run ./...
 	@echo '✅ golangci-lint complete'
 
 ## audit: Tidy dependencies and format, vet and test all code
 .PHONY: audit
-audit:
+audit: check_goimports check_staticcheck
 	@echo 'Tidying and verifying module dependencies...'
 	go mod tidy
 	go mod verify
 	@echo 'Formatting code...'
-	@if ! command -v goimports >/dev/null 2>&1; then \
-		echo "Installing goimports..."; \
-		go install golang.org/x/tools/cmd/goimports@latest; \
-	fi
 	@goimports -w -local github.com/bashhack/cdx $$(find . -name '*.go' -not -path "./vendor/*")
 	@echo 'Vetting code...'
 	go vet ./...
 	@echo 'Running staticcheck...'
-	@$(MAKE) check_staticcheck
 	staticcheck ./...
 	@echo 'Running tests...'
 	go test -short -vet=off ./...
@@ -169,6 +161,15 @@ coverage:
 # ============================================================================= #
 # BUILD
 # ============================================================================= #
+
+## clean: Remove build artifacts
+.PHONY: clean
+clean:
+	@echo 'Cleaning build artifacts...'
+	@rm -f cdx
+	@rm -f coverage.out
+	@rm -rf vendor/
+	@echo '✅ Clean complete'
 
 ## build: Build the application
 .PHONY: build
