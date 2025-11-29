@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Commit message hook for conventional commit enforcement
+
+set -e
+
+# Check if commitlint is installed
+if ! command -v commitlint >/dev/null 2>&1; then
+    echo "📦 Installing commitlint..."
+    go install github.com/conventionalcommit/commitlint@latest
+fi
+
+# Lint the commit message
+commitlint lint --message "$1"
