@@ -16,7 +16,7 @@ search:
 		echo "Install with: brew install fzf"; \
 		exit 1; \
 	fi
-	@target=$$(sed -n 's/^##//p' ${MAKEFILE_LIST} | fzf --height=50% --reverse --header="Select a command to run" | awk '{print $$1}'); \
+	@target=$$(sed -n 's/^##//p' ${MAKEFILE_LIST} | fzf --height=50% --reverse --header="Select a command to run" | awk -F: '{print $$1}' | xargs); \
 	if [ -n "$$target" ]; then \
 		echo "Running: make $$target"; \
 		$(MAKE) $$target; \
