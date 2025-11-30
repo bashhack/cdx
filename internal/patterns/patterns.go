@@ -66,7 +66,11 @@ func DetectLanguage(ext string) Language {
 
 // AllLanguages returns all supported languages.
 func AllLanguages() []Language {
-	return []Language{Go, TypeScript, JavaScript, Python, Rust}
+	langs := make([]Language, 0, len(registry))
+	for lang := range registry {
+		langs = append(langs, lang)
+	}
+	return langs
 }
 
 // goPatterns returns Go-specific patterns.
@@ -283,8 +287,19 @@ func DefinitionPatternFor(symbol string, lang Language) []*regexp.Regexp {
 			case "type", "interface":
 				patStr = `^type\s+` + sym + `\s+`
 			case "const":
-				// Match standalone const or tab-indented block member (gofmt style)
-				patStr = `(?:^const\s+|^\t)` + sym + `\s*(?:=|[A-Za-z])`
+				// Two patterns: standalone const and tab-indented block member (gofmt style)
+				for _, constPat := range []string{
+					`^const\s+` + sym + `\s*(?:=|[A-Za-z])`,
+					`^\t` + sym + `\s*(?:=|[A-Za-z])`,
+				} {
+					if !seen[constPat] {
+						seen[constPat] = true
+						// Error safe to ignore: hardcoded template + QuoteMeta
+						if re, err := regexp.Compile(constPat); err == nil {
+							patterns = append(patterns, re)
+						}
+					}
+				}
 			case "var":
 				patStr = `^var\s+` + sym + `\s*`
 			}
@@ -319,6 +334,8 @@ func DefinitionPatternFor(symbol string, lang Language) []*regexp.Regexp {
 
 		if patStr != "" && !seen[patStr] {
 			seen[patStr] = true
+			// Compilation errors are safe to ignore: patterns are built from
+			// hardcoded templates + regexp.QuoteMeta(symbol), so they're always valid.
 			if re, err := regexp.Compile(patStr); err == nil {
 				patterns = append(patterns, re)
 			}
