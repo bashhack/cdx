@@ -11,6 +11,11 @@ import (
 	"github.com/bashhack/cdx/internal/search"
 )
 
+const (
+	defaultMaxResults    = 10
+	defaultSearchTimeout = 30 * time.Second
+)
+
 var (
 	defLang         string
 	defAll          bool
@@ -42,7 +47,9 @@ func init() {
 func runDef(cmd *cobra.Command, args []string) error {
 	symbol := args[0]
 
-	// Get current directory
+	// Get current directory. If Getwd fails (e.g., directory was deleted),
+	// fall back to "." silently - it's semantically equivalent and this edge
+	// case doesn't warrant logging infrastructure.
 	dir, err := os.Getwd()
 	if err != nil {
 		dir = "."
@@ -60,11 +67,11 @@ func runDef(cmd *cobra.Command, args []string) error {
 	}
 
 	if !defAll {
-		opts.MaxResults = 10 // Limit results by default
+		opts.MaxResults = defaultMaxResults
 	}
 
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultSearchTimeout)
 	defer cancel()
 
 	// Find definitions
