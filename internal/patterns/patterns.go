@@ -104,9 +104,14 @@ func goPatterns() *LanguagePatterns {
 				Regex: regexp.MustCompile(`^type\s+([A-Za-z_][A-Za-z0-9_]*)\s+[A-Za-z]`),
 				Kind:  "type",
 			},
-			// const ConstName = or const ( ConstName =
+			// const ConstName = (standalone declaration)
 			{
-				Regex: regexp.MustCompile(`^\s*([A-Z_][A-Za-z0-9_]*)\s*(?:=|[A-Za-z])`),
+				Regex: regexp.MustCompile(`^const\s+([A-Z_][A-Za-z0-9_]*)\s*(?:=|[A-Za-z])`),
+				Kind:  "const",
+			},
+			// Const block member (tab-indented per gofmt)
+			{
+				Regex: regexp.MustCompile(`^\t([A-Z_][A-Za-z0-9_]*)\s*(?:=|[A-Za-z])`),
 				Kind:  "const",
 			},
 			// var VarName = or var VarName Type
@@ -130,9 +135,14 @@ func tsPatterns() *LanguagePatterns {
 				Regex: regexp.MustCompile(`^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*[<(]`),
 				Kind:  "function",
 			},
-			// const functionName = (arrow function)
+			// const functionName = (): Type => (arrow function with parens, optional return type)
 			{
-				Regex: regexp.MustCompile(`^(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?\(`),
+				Regex: regexp.MustCompile(`^(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?\((?:[^()]*|\([^()]*\))*\).*?=>`),
+				Kind:  "function",
+			},
+			// const functionName = x => (arrow function without parens)
+			{
+				Regex: regexp.MustCompile(`^(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s+)?[A-Za-z_$][A-Za-z0-9_$]*\s*=>`),
 				Kind:  "function",
 			},
 			// class ClassName
@@ -171,9 +181,14 @@ func jsPatterns() *LanguagePatterns {
 				Regex: regexp.MustCompile(`^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(`),
 				Kind:  "function",
 			},
-			// const functionName = (arrow function)
+			// const functionName = (): Type => (arrow function with parens, optional return type)
 			{
-				Regex: regexp.MustCompile(`^(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?\(`),
+				Regex: regexp.MustCompile(`^(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?\((?:[^()]*|\([^()]*\))*\).*?=>`),
+				Kind:  "function",
+			},
+			// const functionName = x => (arrow function without parens)
+			{
+				Regex: regexp.MustCompile(`^(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s+)?[A-Za-z_$][A-Za-z0-9_$]*\s*=>`),
 				Kind:  "function",
 			},
 			// class ClassName
@@ -250,50 +265,60 @@ func DefinitionPatternFor(symbol string, lang Language) []*regexp.Regexp {
 		return nil
 	}
 
+	// Track seen patterns to avoid duplicates (e.g., multiple "type" patterns
+	// in Go all generate the same symbol-specific regex)
+	seen := make(map[string]bool)
 	var patterns []*regexp.Regexp
+	sym := regexp.QuoteMeta(symbol)
+
 	for _, p := range lp.Definition {
-		// Build a pattern that specifically matches this symbol
 		var patStr string
 		switch lang {
 		case Go:
 			switch p.Kind {
 			case "function":
-				patStr = `^func\s+` + regexp.QuoteMeta(symbol) + `\s*\(`
+				patStr = `^func\s+` + sym + `\s*\(`
 			case "method":
-				patStr = `^func\s+\([^)]+\)\s+` + regexp.QuoteMeta(symbol) + `\s*\(`
+				patStr = `^func\s+\([^)]+\)\s+` + sym + `\s*\(`
 			case "type", "interface":
-				patStr = `^type\s+` + regexp.QuoteMeta(symbol) + `\s+`
+				patStr = `^type\s+` + sym + `\s+`
 			case "const":
-				patStr = `(?:^const\s+|^\s+)` + regexp.QuoteMeta(symbol) + `\s*(?:=|[A-Za-z])`
+				// Match standalone const or tab-indented block member (gofmt style)
+				patStr = `(?:^const\s+|^\t)` + sym + `\s*(?:=|[A-Za-z])`
 			case "var":
-				patStr = `^var\s+` + regexp.QuoteMeta(symbol) + `\s*`
+				patStr = `^var\s+` + sym + `\s*`
 			}
 		case TypeScript, JavaScript:
 			switch p.Kind {
 			case "function":
-				patStr = `(?:^(?:export\s+)?(?:async\s+)?function\s+` + regexp.QuoteMeta(symbol) + `|^(?:export\s+)?const\s+` + regexp.QuoteMeta(symbol) + `\s*=)`
+				// Match: function decl, arrow with parens (+ optional return type), or arrow without parens
+				patStr = `(?:` +
+					`^(?:export\s+)?(?:async\s+)?function\s+` + sym + `|` +
+					`^(?:export\s+)?const\s+` + sym + `\s*=\s*(?:async\s*)?\((?:[^()]*|\([^()]*\))*\).*?=>|` +
+					`^(?:export\s+)?const\s+` + sym + `\s*=\s*(?:async\s+)?[A-Za-z_$][A-Za-z0-9_$]*\s*=>)`
 			case "type", "interface":
-				patStr = `^(?:export\s+)?(?:class|interface|type|enum)\s+` + regexp.QuoteMeta(symbol)
+				patStr = `^(?:export\s+)?(?:class|interface|type|enum)\s+` + sym
 			}
 		case Python:
 			switch p.Kind {
 			case "function":
-				patStr = `^(?:async\s+)?def\s+` + regexp.QuoteMeta(symbol) + `\s*\(`
+				patStr = `^(?:async\s+)?def\s+` + sym + `\s*\(`
 			case "type":
-				patStr = `^class\s+` + regexp.QuoteMeta(symbol)
+				patStr = `^class\s+` + sym
 			}
 		case Rust:
 			switch p.Kind {
 			case "function":
-				patStr = `^(?:pub\s+)?(?:async\s+)?fn\s+` + regexp.QuoteMeta(symbol) + `\s*[<(]`
+				patStr = `^(?:pub\s+)?(?:async\s+)?fn\s+` + sym + `\s*[<(]`
 			case "type":
-				patStr = `^(?:pub\s+)?(?:struct|enum)\s+` + regexp.QuoteMeta(symbol)
+				patStr = `^(?:pub\s+)?(?:struct|enum)\s+` + sym
 			case "interface":
-				patStr = `^(?:pub\s+)?trait\s+` + regexp.QuoteMeta(symbol)
+				patStr = `^(?:pub\s+)?trait\s+` + sym
 			}
 		}
 
-		if patStr != "" {
+		if patStr != "" && !seen[patStr] {
+			seen[patStr] = true
 			if re, err := regexp.Compile(patStr); err == nil {
 				patterns = append(patterns, re)
 			}
