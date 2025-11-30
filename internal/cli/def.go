@@ -33,7 +33,7 @@ Examples:
 
 func init() {
 	defCmd.Flags().StringVarP(&defLang, "lang", "l", "", "Force language (go, ts, js, py, rust)")
-	defCmd.Flags().BoolVarP(&defAll, "all", "a", false, "Show all definitions (not just primary)")
+	defCmd.Flags().BoolVarP(&defAll, "all", "a", false, "Include test files and show all results (no limit)")
 	defCmd.Flags().IntVarP(&defContextLines, "context", "C", 0, "Lines of context around definition")
 
 	rootCmd.AddCommand(defCmd)
